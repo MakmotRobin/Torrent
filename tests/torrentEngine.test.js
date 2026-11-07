@@ -386,4 +386,190 @@ describe('TorrentEngine', () => {
     unsubscribe();
     expect(mockIpc.removeListener).toHaveBeenCalledWith('torrent:update', expect.any(Function));
   });
+
+  it('cleans up base32 initialHash key when 40-character hex infoHash is resolved', async () => {
+    // 32-char base32 string
+    const base32Hash = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const hexHash = '0123456789abcdef0123456789abcdef01234567';
+
+    const mockTorrent = Object.assign(new EventEmitter(), {
+      infoHash: null,
+      name: 'Base32 Test',
+      ready: false,
+      files: [],
+      wires: [],
+    });
+
+    const mockClient = {
+      add: vi.fn().mockReturnValue(mockTorrent),
+      remove: vi.fn((_t, _opts, cb) => cb && cb()),
+      destroy: vi.fn((cb) => cb && cb()),
+      on: vi.fn(),
+      torrents: [mockTorrent],
+    };
+
+    const customEngine = new TorrentEngine(mockStore, {
+      client: mockClient,
+      updateInterval: 0,
+      autoLoad: false,
+    });
+
+    const addPromise = customEngine.addTorrent(base32Hash);
+    expect(customEngine.torrents.has(base32Hash)).toBe(true);
+
+    // Now WebTorrent resolves the hex infohash
+    mockTorrent.infoHash = hexHash;
+    mockTorrent.emit('infoHash');
+    await addPromise;
+
+    // The base32 key must be removed and only the 40-char hex key retained
+    expect(customEngine.torrents.has(base32Hash)).toBe(false);
+    expect(customEngine.torrents.has(hexHash)).toBe(true);
+    expect(customEngine.getAllTorrentsSummary()).toHaveLength(1);
+    expect(customEngine.getAllTorrentsSummary()[0].infoHash).toBe(hexHash);
+
+    await customEngine.destroy();
+  });
+
+  it('persists valid magnetURI for Buffer sources and handles legacy torrent-file entries', async () => {
+    const hexHash = '5555555555555555555555555555555555555555';
+    const magnetUri = `magnet:?xt=urn:btih:${hexHash}&dn=Buffer+Torrent`;
+
+    const mockTorrent = Object.assign(new EventEmitter(), {
+      infoHash: hexHash,
+      magnetURI: magnetUri,
+      name: 'Buffer Torrent',
+      ready: true,
+      files: [],
+      wires: [],
+    });
+
+    const mockClient = {
+      add: vi.fn().mockReturnValue(mockTorrent),
+      remove: vi.fn((_t, _opts, cb) => cb && cb()),
+      destroy: vi.fn((cb) => cb && cb()),
+      on: vi.fn(),
+      torrents: [mockTorrent],
+    };
+
+    const customEngine = new TorrentEngine(mockStore, {
+      client: mockClient,
+      updateInterval: 0,
+      autoLoad: false,
+    });
+
+    // Add via Buffer
+    const fakeBuffer = Buffer.from('fake torrent content');
+    await customEngine.addTorrent(fakeBuffer, { name: 'Buffer Torrent' });
+
+    // Verify persisted torrent contains valid source (magnetURI), not 'torrent-file'
+    expect(mockStore.saveTorrents).toHaveBeenCalled();
+    const savedTorrents = mockStore.saveTorrents.mock.calls.at(-1)[0];
+    expect(savedTorrents[0].source).toBe(magnetUri);
+    expect(savedTorrents[0].source).not.toBe('torrent-file');
+
+    await customEngine.destroy();
+
+    // Now test loadPersistedTorrents with legacy 'torrent-file' source
+    mockStore.getTorrents.mockReturnValue([
+      {
+        infoHash: hexHash,
+        source: 'torrent-file',
+        magnetURI: magnetUri,
+        name: 'Legacy Torrent',
+        path: tmpDir,
+      },
+    ]);
+
+    const restoreEngine = new TorrentEngine(mockStore, {
+      client: mockClient,
+      updateInterval: 0,
+      autoLoad: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockClient.add).toHaveBeenLastCalledWith(magnetUri, expect.any(Object));
+
+    await restoreEngine.destroy();
+  });
+
+  it('does not trigger IPC update broadcasts on high-frequency download/upload/wire events', async () => {
+    const mockTorrent = Object.assign(new EventEmitter(), {
+      infoHash: '6666666666666666666666666666666666666666',
+      name: 'High Frequency Test',
+      ready: true,
+      files: [],
+      wires: [],
+    });
+
+    const mockClient = {
+      add: vi.fn().mockReturnValue(mockTorrent),
+      remove: vi.fn((_t, _opts, cb) => cb && cb()),
+      destroy: vi.fn((cb) => cb && cb()),
+      on: vi.fn(),
+      torrents: [mockTorrent],
+    };
+
+    const customEngine = new TorrentEngine(mockStore, {
+      client: mockClient,
+      updateInterval: 0,
+      autoLoad: false,
+    });
+
+    await customEngine.addTorrent('6666666666666666666666666666666666666666');
+
+    const updateSpy = vi.fn();
+    customEngine.on('torrent:update', updateSpy);
+
+    // Emitting high-frequency events should NOT trigger immediate torrent:update
+    mockTorrent.emit('download', 16384);
+    mockTorrent.emit('upload', 16384);
+    mockTorrent.emit('wire', {});
+
+    expect(updateSpy).not.toHaveBeenCalled();
+
+    await customEngine.destroy();
+  });
+
+  it('times out cleanly in removeTorrent if client.remove never invokes callback', async () => {
+    vi.useFakeTimers();
+
+    const mockTorrent = Object.assign(new EventEmitter(), {
+      infoHash: '7777777777777777777777777777777777777777',
+      name: 'Hanging Client Torrent',
+      ready: true,
+      files: [],
+      wires: [],
+    });
+
+    const mockClient = {
+      add: vi.fn().mockReturnValue(mockTorrent),
+      remove: vi.fn((_t, _opts, _cb) => {
+        // Deliberately never calls callback (simulating hanging disconnect)
+      }),
+      destroy: vi.fn((cb) => cb && cb()),
+      on: vi.fn(),
+      torrents: [mockTorrent],
+    };
+
+    const customEngine = new TorrentEngine(mockStore, {
+      client: mockClient,
+      updateInterval: 0,
+      autoLoad: false,
+    });
+
+    await customEngine.addTorrent('7777777777777777777777777777777777777777');
+
+    const removePromise = customEngine.removeTorrent('7777777777777777777777777777777777777777');
+
+    // Advance timers to trigger the fallback guard
+    await vi.advanceTimersByTimeAsync(2100);
+
+    const removed = await removePromise;
+    expect(removed).toBe(true);
+    expect(customEngine.getTorrentSummary('7777777777777777777777777777777777777777')).toBeNull();
+
+    vi.useRealTimers();
+    await customEngine.destroy();
+  });
 });

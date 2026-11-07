@@ -142,8 +142,17 @@ export class TorrentEngine extends EventEmitter {
 
         const onInfoHash = () => {
           if (torrent.infoHash) {
-            state.infoHash = torrent.infoHash.toLowerCase();
-            this.torrents.set(state.infoHash, state);
+            const newHash = torrent.infoHash.toLowerCase();
+            if (initialHash && initialHash !== newHash) {
+              this.torrents.delete(initialHash);
+            }
+            state.infoHash = newHash;
+            this.torrents.set(newHash, state);
+          }
+          if (torrent.magnetURI) {
+            state.source = torrent.magnetURI;
+          } else if (state.infoHash && (!state.source || state.source === 'torrent-file')) {
+            state.source = state.infoHash;
           }
           this._emitUpdates();
           this.persistTorrents();
@@ -159,6 +168,11 @@ export class TorrentEngine extends EventEmitter {
         if (typeof torrent.on === 'function') {
           torrent.on('metadata', () => {
             state.name = torrent.name || state.name;
+            if (torrent.magnetURI) {
+              state.source = torrent.magnetURI;
+            } else if (state.infoHash && (!state.source || state.source === 'torrent-file')) {
+              state.source = state.infoHash;
+            }
             if (state.filePriorities) {
               this._applyFilePriorities(torrent, state.filePriorities);
             }
@@ -171,11 +185,11 @@ export class TorrentEngine extends EventEmitter {
           });
 
           torrent.on('download', () => {
-            this._emitUpdates();
+            // High-frequency chunk downloads rely on periodic timer interval
           });
 
           torrent.on('upload', () => {
-            this._emitUpdates();
+            // High-frequency chunk uploads rely on periodic timer interval
           });
 
           torrent.on('done', () => {
@@ -184,7 +198,7 @@ export class TorrentEngine extends EventEmitter {
           });
 
           torrent.on('wire', () => {
-            this._emitUpdates();
+            // Wire connections rely on periodic timer interval
           });
 
           torrent.on('error', (err) => {
@@ -273,10 +287,24 @@ export class TorrentEngine extends EventEmitter {
 
     if (torrent && this.client) {
       await new Promise((resolve) => {
+        let finished = false;
+        const done = () => {
+          if (!finished) {
+            finished = true;
+            resolve();
+          }
+        };
+
+        const timer = setTimeout(done, 2000);
+
         try {
-          this.client.remove(torrent, { destroyStore: deleteFiles }, () => resolve());
+          this.client.remove(torrent, { destroyStore: deleteFiles }, () => {
+            clearTimeout(timer);
+            done();
+          });
         } catch (_) {
-          resolve();
+          clearTimeout(timer);
+          done();
         }
       });
     }
@@ -505,10 +533,13 @@ export class TorrentEngine extends EventEmitter {
     if (!this.store || typeof this.store.saveTorrents !== 'function') return;
     const list = [];
     for (const [key, entry] of this.torrents) {
+      const source = (entry.source && entry.source !== 'torrent-file')
+        ? entry.source
+        : (entry.torrent?.magnetURI || entry.infoHash || key);
       list.push({
         infoHash: entry.infoHash || key,
         name: entry.name,
-        source: entry.source,
+        source,
         path: entry.path,
         paused: Boolean(entry.paused),
         filePriorities: entry.filePriorities || {},
@@ -527,7 +558,9 @@ export class TorrentEngine extends EventEmitter {
     if (!Array.isArray(savedList)) return;
 
     for (const item of savedList) {
-      const source = item.source || item.infoHash;
+      const source = (item.source && item.source !== 'torrent-file')
+        ? item.source
+        : (item.magnetURI || item.infoHash);
       if (source) {
         try {
           await this.addTorrent(source, {
