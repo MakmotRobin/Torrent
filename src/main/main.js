@@ -195,9 +195,12 @@ export async function initApp() {
       return null;
     }
 
-    app.on('second-instance', (event, commandLine) => {
-      if (mainWindow) {
+    app.on('second-instance', async (event, commandLine) => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        mainWindow = await createWindow();
+      } else {
         if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
         mainWindow.focus();
       }
       if (Array.isArray(commandLine)) {
@@ -249,14 +252,26 @@ if (app && typeof app.whenReady === 'function') {
     });
   });
 
+  let isQuitting = false;
+  const handleExit = async () => {
+    if (isQuitting) return;
+    isQuitting = true;
+    try {
+      await cleanup();
+    } catch (_) {}
+    if (app && typeof app.exit === 'function') {
+      app.exit(0);
+    }
+  };
+
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-      app.quit();
+      handleExit();
     }
   });
 
-  app.on('before-quit', async () => {
-    await cleanup();
+  app.on('before-quit', () => {
+    handleExit();
   });
 }
 
