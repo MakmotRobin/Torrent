@@ -21,6 +21,10 @@ let engine = null;
  * @returns {Promise<object>} mainWindow
  */
 export async function createWindow() {
+  const iconPath = process.platform === 'win32'
+    ? path.join(__dirname, '../../assets/icon.ico')
+    : path.join(__dirname, '../../assets/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -28,6 +32,7 @@ export async function createWindow() {
     minHeight: 600,
     backgroundColor: '#18181b', // zinc-900 dark theme
     title: 'Torrent Desktop',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
