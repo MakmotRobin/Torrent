@@ -82,6 +82,34 @@ export function setupDownloadsFolderWatcher(engineInstance, folderPath) {
   }
 }
 
+let isQuitting = false;
+
+/**
+ * Ensures immediate, clean termination of the application and all child processes.
+ */
+export async function handleExit() {
+  if (isQuitting) return;
+  isQuitting = true;
+
+  // Hard emergency exit timeout in case WebTorrent sockets hang
+  const timer = setTimeout(() => {
+    if (app && typeof app.exit === 'function') {
+      app.exit(0);
+    }
+    process.exit(0);
+  }, 400);
+  if (timer.unref) timer.unref();
+
+  try {
+    await cleanup();
+  } catch (_) {}
+
+  if (app && typeof app.exit === 'function') {
+    app.exit(0);
+  }
+  process.exit(0);
+}
+
 /**
  * Creates and configures the main desktop BrowserWindow.
  *
@@ -140,6 +168,9 @@ export async function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    if (process.platform !== 'darwin') {
+      handleExit();
+    }
   });
 
   return mainWindow;
@@ -261,18 +292,6 @@ if (app && typeof app.whenReady === 'function') {
       }
     });
   });
-
-  let isQuitting = false;
-  const handleExit = async () => {
-    if (isQuitting) return;
-    isQuitting = true;
-    try {
-      await cleanup();
-    } catch (_) {}
-    if (app && typeof app.exit === 'function') {
-      app.exit(0);
-    }
-  };
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

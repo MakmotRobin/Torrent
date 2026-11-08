@@ -652,12 +652,18 @@ export class TorrentEngine extends EventEmitter {
     }
     if (this.client) {
       await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 300);
         try {
-          this.client.destroy(() => resolve());
+          this.client.destroy(() => {
+            clearTimeout(timeout);
+            resolve();
+          });
         } catch (_) {
+          clearTimeout(timeout);
           resolve();
         }
       });
+      this.client = null;
     }
   }
 }
