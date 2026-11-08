@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import EventEmitter from 'events';
 import { registerIpcHandlers } from '../src/main/ipcHandlers.js';
-import { setupEngineBroadcasting, cleanup } from '../src/main/main.js';
+import { setupEngineBroadcasting, cleanup, handleIncomingArg, setupDownloadsFolderWatcher } from '../src/main/main.js';
 
 describe('IPC Handlers', () => {
   let ipcMain;
@@ -242,6 +242,22 @@ describe('IPC Handlers', () => {
 
     it('cleans up resources cleanly', async () => {
       await expect(cleanup()).resolves.toBeUndefined();
+    });
+
+    it('handles incoming magnet links and torrent arguments', async () => {
+      const mockEng = { addTorrent: vi.fn().mockResolvedValue({}) };
+      const res = await handleIncomingArg('magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567', mockEng);
+      expect(res).toBe(true);
+      expect(mockEng.addTorrent).toHaveBeenCalled();
+
+      const invalid = await handleIncomingArg('not-a-torrent', mockEng);
+      expect(invalid).toBe(false);
+    });
+
+    it('handles downloads folder watcher setup cleanly', () => {
+      const mockEng = { addTorrent: vi.fn() };
+      const watcher = setupDownloadsFolderWatcher(mockEng, '/non/existent/path');
+      expect(watcher).toBeNull();
     });
   });
 });

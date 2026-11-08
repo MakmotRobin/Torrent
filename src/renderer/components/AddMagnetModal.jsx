@@ -38,7 +38,7 @@ export function AddMagnetModal({ isOpen, onClose, onAdd, defaultDownloadPath }) 
 
   const trimmed = inputValue.trim();
   const parsed = parseTorrentInput(trimmed);
-  const isValid = parsed.type === 'magnet' || parsed.type === 'infohash';
+  const isValid = parsed.type === 'magnet' || parsed.type === 'infohash' || parsed.type === 'url';
   const showError = (touched || trimmed.length > 0) && trimmed.length > 0 && !isValid;
 
   const handleClose = () => {

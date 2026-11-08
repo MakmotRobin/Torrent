@@ -108,5 +108,10 @@ export function parseTorrentInput(input) {
     return { type: 'infohash', value: trimmed.toLowerCase() };
   }
 
+  // HTTP or HTTPS URL (direct torrent link or web seed)
+  if (/^https?:\/\/.+/i.test(trimmed)) {
+    return { type: 'url', value: trimmed };
+  }
+
   return { type: 'invalid', value: trimmed };
 }

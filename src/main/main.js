@@ -14,6 +14,73 @@ const __dirname = path.dirname(__filename);
 let mainWindow = null;
 let store = null;
 let engine = null;
+let downloadsWatcher = null;
+
+/**
+ * Handles an incoming command line argument or URL (magnet link, .torrent file, or HTTP URL).
+ *
+ * @param {string} arg
+ * @param {object} engineInstance
+ * @returns {Promise<boolean>}
+ */
+export async function handleIncomingArg(arg, engineInstance) {
+  if (!arg || typeof arg !== 'string') return false;
+  const trimmed = arg.trim();
+  const isMagnet = trimmed.toLowerCase().startsWith('magnet:?');
+  const isTorrentFile = trimmed.toLowerCase().endsWith('.torrent') && fs.existsSync(trimmed);
+  const isHex = /^[a-fA-F0-9]{40}$/.test(trimmed);
+  const isBase32 = /^[a-zA-Z2-7]{32}$/.test(trimmed);
+  const isHttpUrl = /^https?:\/\/.+/i.test(trimmed);
+
+  if (isMagnet || isTorrentFile || isHex || isBase32 || isHttpUrl) {
+    try {
+      if (engineInstance && typeof engineInstance.addTorrent === 'function') {
+        await engineInstance.addTorrent(trimmed);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Failed to auto-add torrent argument:', err.message);
+    }
+  }
+  return false;
+}
+
+/**
+ * Starts watching the user's Downloads folder for newly downloaded .torrent files,
+ * automatically loading and starting them.
+ *
+ * @param {object} engineInstance
+ * @param {string} [folderPath]
+ * @returns {fs.FSWatcher|null}
+ */
+export function setupDownloadsFolderWatcher(engineInstance, folderPath) {
+  const watchDir = folderPath || path.join(process.env.USERPROFILE || process.env.HOME || '', 'Downloads');
+  if (!watchDir || !fs.existsSync(watchDir)) return null;
+
+  try {
+    const watcher = fs.watch(watchDir, (eventType, filename) => {
+      if (filename && filename.toLowerCase().endsWith('.torrent')) {
+        const fullPath = path.join(watchDir, filename);
+        setTimeout(async () => {
+          if (fs.existsSync(fullPath)) {
+            try {
+              if (engineInstance && typeof engineInstance.addTorrent === 'function') {
+                await engineInstance.addTorrent(fullPath);
+                console.log('Auto-started torrent from Downloads folder:', filename);
+              }
+            } catch (err) {
+              console.warn('Failed to auto-start torrent from Downloads:', err.message);
+            }
+          }
+        }, 800);
+      }
+    });
+    return watcher;
+  } catch (err) {
+    console.warn('Could not watch Downloads folder:', err.message);
+    return null;
+  }
+}
 
 /**
  * Creates and configures the main desktop BrowserWindow.
@@ -102,6 +169,48 @@ export async function initApp() {
 
   setupEngineBroadcasting(engine, () => mainWindow);
 
+  // Set as default protocol client for magnet links in Windows
+  if (app && typeof app.setAsDefaultProtocolClient === 'function') {
+    try {
+      if (process.defaultApp && process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('magnet', process.execPath, [path.resolve(process.argv[1])]);
+      } else {
+        app.setAsDefaultProtocolClient('magnet');
+      }
+    } catch (_) {}
+  }
+
+  // Handle single instance lock and incoming second-instance links
+  if (app && typeof app.requestSingleInstanceLock === 'function') {
+    const gotTheLock = app.requestSingleInstanceLock();
+    if (!gotTheLock) {
+      app.quit();
+      return null;
+    }
+
+    app.on('second-instance', (event, commandLine) => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+      if (Array.isArray(commandLine)) {
+        for (const arg of commandLine) {
+          handleIncomingArg(arg, engine);
+        }
+      }
+    });
+  }
+
+  // Process initial command line arguments (e.g. clicked magnet link or .torrent file)
+  if (Array.isArray(process.argv)) {
+    for (const arg of process.argv.slice(1)) {
+      handleIncomingArg(arg, engine);
+    }
+  }
+
+  // Start watching user's Downloads folder for newly saved .torrent files
+  downloadsWatcher = setupDownloadsFolderWatcher(engine);
+
   return await createWindow();
 }
 
@@ -109,6 +218,12 @@ export async function initApp() {
  * Performs graceful shutdown of torrent engine and resources.
  */
 export async function cleanup() {
+  if (downloadsWatcher) {
+    try {
+      downloadsWatcher.close();
+    } catch (_) {}
+    downloadsWatcher = null;
+  }
   if (engine) {
     await engine.destroy();
     engine = null;
@@ -143,4 +258,6 @@ export default {
   initApp,
   cleanup,
   setupEngineBroadcasting,
+  handleIncomingArg,
+  setupDownloadsFolderWatcher,
 };
