@@ -5,6 +5,17 @@ import os from 'os';
 import WebTorrent from 'webtorrent';
 import { parseTorrentInput } from '../shared/formatters.js';
 
+export const DEFAULT_PUBLIC_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://tracker.openbittorrent.com:6969/announce',
+  'udp://exodus.desync.com:6969/announce',
+  'udp://9.rarbg.to:2920/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://explodie.org:6969/announce',
+  'http://tracker.openbittorrent.com:80/announce'
+];
+
 /**
  * Core BitTorrent engine wrapping WebTorrent client,
  * managing torrent lifecycle, event dispatching, disk persistence, and bandwidth stats.
@@ -133,6 +144,7 @@ export class TorrentEngine extends EventEmitter {
 
       const clientOpts = {
         path: downloadPath,
+        announce: options.torrentOptions?.announce || DEFAULT_PUBLIC_TRACKERS,
         ...options.torrentOptions,
       };
 
