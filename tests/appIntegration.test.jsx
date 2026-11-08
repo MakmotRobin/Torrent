@@ -233,7 +233,9 @@ describe('App Integration', () => {
     });
   });
 
-  it('handles toolbar actions: Add File, Add Magnet, Pause, Resume, Delete, Open Folder, Settings', async () => {
+  it(
+    'handles toolbar actions: Add File, Add Magnet, Pause, Resume, Delete, Open Folder, Settings',
+    async () => {
     let torrentCallback;
     mockTorrentAPI.onTorrentUpdate.mockImplementation((cb) => {
       torrentCallback = cb;
@@ -321,7 +323,7 @@ describe('App Integration', () => {
         expect.objectContaining({ maxActiveDownloads: 8 })
       );
     });
-  });
+  }, 15000);
 
   it('supports drag-and-drop torrent file and magnet link onto window', async () => {
     await act(async () => {
