@@ -19,6 +19,11 @@ export function registerIpcHandlers(
   dialog = defaultDialog,
   shell = defaultShell
 ) {
+  // torrent:getAll ()
+  ipcMain.handle('torrent:getAll', async () => {
+    return engine?.getAllTorrentsSummary ? engine.getAllTorrentsSummary() : [];
+  });
+
   // torrent:add (source, options)
   ipcMain.handle('torrent:add', async (_event, source, options) => {
     return await engine.addTorrent(source, options);

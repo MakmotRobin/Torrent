@@ -113,6 +113,13 @@ export async function createWindow() {
     mainWindow.show();
   });
 
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (engine && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('torrent:update', engine.getAllTorrentsSummary());
+      mainWindow.webContents.send('stats:update', engine.getGlobalStats());
+    }
+  });
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   const distPath = path.join(__dirname, '../../dist/index.html');
 

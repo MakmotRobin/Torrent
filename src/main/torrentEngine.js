@@ -89,6 +89,15 @@ export class TorrentEngine extends EventEmitter {
 
     const downloadPath = options.path || this.getDownloadPath();
 
+    // Ensure download directory exists on disk
+    try {
+      if (!fs.existsSync(downloadPath)) {
+        fs.mkdirSync(downloadPath, { recursive: true });
+      }
+    } catch (err) {
+      console.warn('Failed to pre-create download directory:', err.message);
+    }
+
     // Attempt to identify infoHash beforehand if string
     const parsed = typeof source === 'string' ? parseTorrentInput(source) : null;
     let initialHash = parsed?.type === 'infohash' ? parsed.value.toLowerCase() : null;
@@ -142,9 +151,27 @@ export class TorrentEngine extends EventEmitter {
         }
       };
 
+      // Merge trackers from magnet URI with options and public fallback trackers
+      const trackerList = [];
+      if (typeof source === 'string' && source.startsWith('magnet:?')) {
+        const trMatches = [...source.matchAll(/[?&]tr=([^&]+)/gi)];
+        for (const m of trMatches) {
+          try {
+            trackerList.push(decodeURIComponent(m[1]));
+          } catch (_) {
+            trackerList.push(m[1]);
+          }
+        }
+      }
+      if (Array.isArray(options.torrentOptions?.announce)) {
+        trackerList.push(...options.torrentOptions.announce);
+      }
+      trackerList.push(...DEFAULT_PUBLIC_TRACKERS);
+      const uniqueAnnounce = Array.from(new Set(trackerList.filter(Boolean)));
+
       const clientOpts = {
         path: downloadPath,
-        announce: options.torrentOptions?.announce || DEFAULT_PUBLIC_TRACKERS,
+        announce: uniqueAnnounce,
         ...options.torrentOptions,
       };
 

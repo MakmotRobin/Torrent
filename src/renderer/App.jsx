@@ -37,6 +37,15 @@ export function App() {
       }).catch(() => {});
     }
 
+    // Immediately fetch initial torrent list
+    if (api.getAllTorrents) {
+      api.getAllTorrents().then((initialTorrents) => {
+        if (Array.isArray(initialTorrents) && initialTorrents.length > 0) {
+          setTorrents(initialTorrents);
+        }
+      }).catch(() => {});
+    }
+
     // Subscribe to torrent updates
     let unsubTorrents = () => {};
     if (api.onTorrentUpdate) {

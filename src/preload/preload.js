@@ -8,6 +8,7 @@ import electron from 'electron';
  */
 export function createTorrentAPI(ipc = electron?.ipcRenderer) {
   return {
+    getAllTorrents: () => ipc?.invoke('torrent:getAll'),
     addTorrent: (source, options) => ipc?.invoke('torrent:add', source, options),
     pauseTorrent: (infoHash) => ipc?.invoke('torrent:pause', infoHash),
     resumeTorrent: (infoHash) => ipc?.invoke('torrent:resume', infoHash),
