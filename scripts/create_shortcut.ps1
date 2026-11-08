@@ -9,7 +9,7 @@ $WshShell = New-Object -ComObject WScript.Shell
 $desktopShortcutPath = Join-Path $desktopPath "Torrent.lnk"
 $Shortcut = $WshShell.CreateShortcut($desktopShortcutPath)
 $Shortcut.TargetPath = $electronExe
-$Shortcut.Arguments = "."
+$Shortcut.Arguments = "`"$projectPath`""
 $Shortcut.WorkingDirectory = $projectPath
 $Shortcut.IconLocation = "$iconPath,0"
 $Shortcut.Description = "uTorrent-style Torrent Desktop App"
@@ -20,7 +20,7 @@ Write-Host "Created Desktop shortcut: $desktopShortcutPath"
 $projectShortcutPath = Join-Path $projectPath "Torrent.lnk"
 $ProjectShortcut = $WshShell.CreateShortcut($projectShortcutPath)
 $ProjectShortcut.TargetPath = $electronExe
-$ProjectShortcut.Arguments = "."
+$ProjectShortcut.Arguments = "`"$projectPath`""
 $ProjectShortcut.WorkingDirectory = $projectPath
 $ProjectShortcut.IconLocation = "$iconPath,0"
 $ProjectShortcut.Description = "uTorrent-style Torrent Desktop App"

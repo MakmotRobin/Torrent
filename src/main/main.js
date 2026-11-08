@@ -100,7 +100,7 @@ export async function createWindow() {
     backgroundColor: '#18181b', // zinc-900 dark theme
     title: 'Torrent Desktop',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
-    show: false,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -111,6 +111,7 @@ export async function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
   });
 
   mainWindow.webContents.once('did-finish-load', () => {
@@ -130,6 +131,11 @@ export async function createWindow() {
   } else {
     // Default fallback to Vite dev server port
     await mainWindow.loadURL('http://localhost:5173');
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
   }
 
   mainWindow.on('closed', () => {
@@ -191,7 +197,11 @@ export async function initApp() {
   if (app && typeof app.requestSingleInstanceLock === 'function') {
     const gotTheLock = app.requestSingleInstanceLock();
     if (!gotTheLock) {
-      app.quit();
+      if (typeof app.exit === 'function') {
+        app.exit(0);
+      } else {
+        app.quit();
+      }
       return null;
     }
 
