@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { TorrentEngine } from '../src/main/torrentEngine.js';
-import { createTorrentAPI } from '../src/preload/preload.js';
+import { createTorrentAPI } from '../src/preload/preload.mjs';
 
 describe('TorrentEngine', () => {
   let engine;

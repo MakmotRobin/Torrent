@@ -102,7 +102,7 @@ export async function createWindow() {
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     show: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/preload.js'),
+      preload: path.join(__dirname, '../preload/preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

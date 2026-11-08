@@ -121,10 +121,6 @@ export function registerIpcHandlers(
   ipcMain.handle('dialog:selectDownloadDirectory', handleSelectDownloadDirectory);
 
   // Convenience queries for initial load
-  ipcMain.handle('torrent:getAll', async () => {
-    return engine?.getAllTorrentsSummary ? engine.getAllTorrentsSummary() : [];
-  });
-
   ipcMain.handle('stats:get', async () => {
     return engine?.getGlobalStats ? engine.getGlobalStats() : {};
   });

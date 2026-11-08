@@ -7,7 +7,7 @@ import { Store } from '../src/main/store.js';
 import { TorrentEngine } from '../src/main/torrentEngine.js';
 import { registerIpcHandlers } from '../src/main/ipcHandlers.js';
 import { setupEngineBroadcasting } from '../src/main/main.js';
-import { createTorrentAPI } from '../src/preload/preload.js';
+import { createTorrentAPI } from '../src/preload/preload.mjs';
 
 describe('End-to-End Application Pipeline & Desktop Packaging', () => {
   let tmpDir;
